@@ -1062,7 +1062,7 @@
 
 	(when children
 	  (setq max-value (inclusive-value (car children)))
-	  loop (while (and (< index (length children)) (= max-value (inclusive-value (nth index children)))) do
+	  (loop while (and (< index (length children)) (= max-value (inclusive-value (nth index children)))) do
 		(setq index (incf index 1))
 	  )
 	  (when (> index 1)
