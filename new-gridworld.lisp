@@ -470,7 +470,7 @@
 	(make-op :name 'sleep :pars '(?f ?h) ; level of fatigue ?f
                                          ; {0, 0.5, 1.0, 1.5, ...}
                                          ; similarly for hunger ?h
-    :preconds '((is_at AG home)
+    :preconds '((is_at AG dorm)
                 (is_tired_to_degree AG ?f)
                 (>= ?f 2.5);(>= ?f 0.5)
                 (is_hungry_to_degree AG ?h)
@@ -493,7 +493,7 @@
 (setq sleep.actual
 	(make-op.actual :name 'sleep.actual :pars '(?f ?h) ; level of fatigue ?f
                                                 	   ; level of hunger ?h
-    :startconds '((is_at AG home)
+    :startconds '((is_at AG dorm)
                   (is_tired_to_degree AG ?f)
                   (>= ?f 2.5)
                   (is_hungry_to_degree AG ?h)
