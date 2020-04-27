@@ -33,7 +33,7 @@
                (name-of-actual-operator name.actual-str (eval name)))
          )
          (op.actual (eval name.actual)); presumed to exist at this point
-         (pars (op-pars op.actual))
+         (pars (op.actual-pars op.actual))
          (par-values (op-pars action))
          (is-first-iter 'T)
          (is-terminated 'NIL)
