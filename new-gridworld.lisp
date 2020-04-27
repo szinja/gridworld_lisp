@@ -16,15 +16,19 @@
 ;;;             The agent will do better when they have studied for the exams in Rhush Rhees and attended all the lectures.
 ;;; Goergen Athletic Center; to exercise and keep energy levels up.
 ;;; Rhush Rhees Library; the agent will study for exams here, so that taking exams will be highly rewarding.
-(def-roadmap '(dorm wilco douglas hylan goergen rr) '((path1 dorm 1 wilco) (path2 dorm 1 douglas) (path3 douglas 1 rr) (path4 dorm 1 rr)
-                                                                           (path5 douglas 1 wilco) (path6 wilco 1 hylan)
-                                                                           (path7 wilco 1 rr) (path8 rr 1 hylan) (path9 goergen 1 wilco)))
-(def-object 'robot '(is_animate can_talk))
-(def-object 'professor '(is_animate can_talk)) ;;; professor in Hylan can talk and can perform/has action of grading the exam
-(def-object 'book '(is_inanimate is_potable)) ;;; when picked up the AG has studied
+(def-roadmap '(dorm douglas rr wilco hylan goergen)
+    '((path1 dorm 1 goergen) (path2 dorm 1 douglas)
+      (path3 dorm 1 rr) (path4 dorm 1 wilco)
+      (path5 douglas 1 goergen) (path6 douglas 1 wilco)
+      (path7 douglas 1 rr) (path8 rr 1 wilco)
+      (path9 rr 1 hylan) (path10 wilco 1 hylan)))
+
+(def-object 'student '(is_animate can_talk))
+(def-object 'professor '(is_animate can_talk))
 (def-object 'burger '(is_inanimate is_edible (has_cost 5.0)))
-(def-object 'threadmill '(is_inanimate is_playable)) ;;; threadmill at Goergen
-(def-object 'coffee '(is_inanimate is_potable (has_cost 3.0))) ;;; coffee when studying in Rhush Rhees
+(def-object 'coffee '(is_inanimate is_potable (has_cost 3.0)))
+(def-object 'book '(is_inanimate is_potable))
+(def-object 'exam '(is_inanimate is_takeable))
 
 ;;; General knowledge of AG from the onset
 ;;; Initially AG is in the dorm, not tired, and has hunger level of 5.0 and a thirst level of 3.0.
@@ -37,18 +41,18 @@
 ;;; AG that are really about the state of the University campus
 ;;; this is just a way of ensuring that AG knows these
 ;;; facts right at the outset.
-(place-object 'AG 'robot 'dorm 0
+(place-object 'AG 'student 'dorm 0
   nil ; no associated-things
   ; current facts
-  '((is_hungry_to_degree AG 5.0)
-	(is_thirsty_to_degree AG 3.0)
+  '((is_hungry_to_degree AG 4.0)
+    (is_thirsty_to_degree AG 2.0)
     (is_tired_to_degree AG 0.0)
-    (can_talk professor)
-    (is_at professor hylan)
-    (is_at coffee2 rr)
-    (is_at burger3 douglas)
-    (is_at threadmill4 goergen)
-    (is_at book5 rr)
+    (is_at coffee1 rr)
+    (is_at burger1 douglas)
+    (is_at book1 rr)
+    (is_at exam1 hylan)
+    (can_talk professor1)
+    (is_at professor1 hylan)
      ; Note AG knows (is_potable coffee2), (is_edible burger3), (is_playable threadmill4) and (is_writable exam5) right after the call to function initialize-state-node
      ; therefore, these are all hidden from AG from onset to prevent
      ; AG from knowing about the writability of the exam2 and edibility of the burger, portability of the coffee etc on the outset until it goes to locations.
@@ -57,46 +61,318 @@
      ; separate from *general knowledge*
   )
   ; propositional attitudes
-  '((knows AG (whether (is_playable threadmill4)))
-    (knows AG (whether (is_edible burger3)))
-    (knows AG (that (knows robot (whether (is_potable coffee2)))))
-   )
+  '((knows AG (whether (is_edible burger1)))
+    (knows AG (whether (is_potable coffee1))))
+  )
 )
 
-;;; initial placement of objects
-(place-object 'burger3 'burger 'douglas 0
-	nil ; no associated-things
-	; current facts
-	'((is_edible burger3)
-	 )
-    nil ; propositional attitudes
+;;; Placing objects in the world
+(place-object 'professor1 'professor 'hylan 0
+  nil
+  nil
+  nil
 )
 
-(place-object 'book5 'book 'rr 0
-	nil ; no associated-things
-	; current facts
-	'((is_potable book5)
-	 )
-    nil ; propositional attitudes
+(place-object 'burger1 'burger 'douglas 0
+	nil
+	'((is_edible burger1))
+  nil
 )
 
-(place-object 'threadmill4 'threadmill 'home 0
-	nil ; no associated-things
-	'((is_playable threadmill4)
-	 )
-    nil ; propositional attitudes
+(place-object 'coffee1 'coffee 'rr 0
+	nil
+	'((is_potable coffee1))
+  nil
 )
+
+(place-object 'book1 'book 'rr 0
+  nil
+  '((is_exam_relevant book1))
+  nil
+)
+
+(place-object 'exam1 'exam 'hylan 0
+  nil
+  '((is_exam_relevant book1))
+  nil
+)
+
+;; setting operators
+(setq *operators* '(walk eat answer_user_ynq answer_user_whq sleep
+                    drink ask+whether play study take_exam) )
+
+;; setting search-beam
+(setq *search-beam*
+  (list (cons 5 *operators*) (cons 4 *operators*) (cons 3 *operators*)) )
+
+
+;;; Defining custom actions
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ADD DESCRIPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq study
+  (make-op :name 'study :pars '(?f ?h ?x ?b) ; ?f fatigue, ?h hunger
+  :preconds '( (not (has_studied AG))
+          (is_at AG ?x)
+          (is_at ?b ?x) ; needs book ?b to study
+          (is_exam_relevant ?b)
+          (is_tired_to_degree AG ?f)
+          (< ?f 3.0) ; cannot study when tired
+          (is_hungry_to_degree AG ?h)
+          (< ?h 3.0) ; cannot study when hungry
+          (not (there_is_a_fire))
+          (not (there_is_a_flood)) )
+  :effects '( (has_studied AG) ; agent has now studied
+          (is_hungry_to_degree AG (+ ?h 0.5)
+          (is_tired_to_degree AG (+ ?h 0.5))) )
+  :time-required 1
+  :value 1
+  )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ADD DESCRIPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq study.actual
+  (make-op.actual :name 'study.actual :pars '(?f ?h ?x ?b)
+  :startconds '( (not (has_studied AG))
+          (is_at AG ?x)
+          (is_at ?b ?x)
+          (is_exam_relevant ?b)
+          (is_tired_to_degree AG ?f)
+          (< ?f 3.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 3.0) )
+  :stopconds '( (has_studied AG)
+          (there_is_a_fire)
+          (there_is_a_flood) )
+  :deletes '( (is_tired_to_degree AG ?#1)
+        (is_thirsty_to_degree AG ?#2) )
+  :adds '( (has_studied AG)
+      (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
+      (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
+  )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ADD DESCRIPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq take_exam
+  (make-op :name 'take-exam :pars '(?f ?h ?x ?e)
+  :preconds '( (has_studied AG)
+          (is_at AG ?x)
+          (is_at ?e ?x)
+          (is_takeable ?e)
+          (is_tired_to_degree AG ?f)
+          (< ?f 3.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 3.0)
+          (not (there_is_a_fire))
+          (not (there_is_a_flood)) )
+  :effects '( (not (is_at ?e ?x)
+          (is_hungry_to_degree AG (+ ?h 0.5)
+          (is_tired_to_degree AG (+ ?h 0.5))) )
+  :time-required 1
+  :value 5
+  )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ADD DESCRIPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq take_exam.actual
+  (make-op.actual :name 'take_exam.actual :pars '(?f ?h ?x ?e)
+  :startconds '( (has_studied AG)
+          (is_at AG ?x)
+          (is_at ?e ?x)
+          (is_takeable ?e)
+          (is_tired_to_degree AG ?f)
+          (< ?f 3.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 3.0) )
+  :stopconds '( (not (is_at ?#4 ?#3))
+          (there_is_a_fire)
+          (there_is_a_flood) )
+  :deletes '( (is_at ?#4 ?#3)
+        (is_tired_to_degree AG ?#1)
+        (is_thirsty_to_degree AG ?#2) )
+  :adds '(
+      (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
+      (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
+  )
+)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; CODE BELOW FROM PROVIDED SAMPLE GRIDWORLD-WORLD
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;(setq *occluded-preds*
 ;    '(is_playable knows is_edible is_potable)
 ; We omit this, as *occluded-preds* is currently already set in
 ; "gridworld-definitions.lisp".
-; the search beam use?
 
-(setq *operators* '(walk eat answer_user_ynq answer_user_whq sleep drink study take_exam ask+whether play))
-(setq *search-beam*
-      ;(list (cons 3 *operators*) (cons 3 *operators*) (cons 3 *operators*) (cons 3 *operators*) (cons 3 *operators*) ))
-     	(list (cons 5 *operators*) (cons 4 *operators*) (cons 3 *operators*) ))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Operator fire.actual is the exogenous fire operator.  As long as there
+;; is no rain, a spontaneous fire has a 5% chance of starting; once
+;; it has started, it has a 50% chance of stopping, and it also goes out
+;; as soon as there is rain.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq fire.actual
+	(make-op.actual :name 'fire.actual :pars '()
+    :startconds '((not (there_is_rain))
+				  (= 3 (random 20))) ; 5% chance of fire starting
+    :starredStopConds '((= 1 (random 2)) ; 50% chance of stopping after starting
+						(there_is_rain))
+    :starredDeletes '((there_is_a_fire))
+    :starredAdds '((navigable PATH1) (navigable PATH2) (navigable PATH3) (navigable PATH4))
+    :deletes '((navigable PATH1) (navigable PATH2) (navigable PATH3) (navigable PATH4))
+    :adds '((there_is_a_fire))
+    )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Operator rain.actual is the exogenous rain operator.  Spontaneous rain
+;; has a 33% chance of starting; once it has started, it has a 25% chance
+;; of stopping.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq rain.actual
+	(make-op.actual :name 'rain.actual :pars '()
+    :startconds '((= 1 (random 3))) ; 33% chance of rain starting
+    :starredStopConds '((= 2 (random 4))) ; 25% chance of stopping after starting
+    :starredDeletes '((there_is_rain))
+    :adds '((there_is_rain))
+    )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Function answer_to_ynq? returns a well-formed formula indicating whether
+;; or not the arg wff is currently in AG's KB, under the closed world
+;; assumption. For example, if AG is currently hungry according to AG's KB,
+;; then (is_hungry AG) is returned as the response to
+;; (answer_to_ynq? '(is_hungry AG)); else, (not (is_hungry AG)) is returned.
+;; This is the `model' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun answer_to_ynq? (wff)
+	(check-yn-fact-in-kb 'NIL wff (state-node-wff-htable *curr-state-node*))
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Function answer_to_ynq.actual? returns a well-formed formula indicating
+;; whether the arg wff is currently in AG's KB, under the closed world
+;; assumption. In addition, the answer is translated into a proper English
+;; sentence and printed on screen.  For example, if AG is currently hungry
+;; according to AG's KB, then (is_hungry AG) is returned as the response to
+;; (answer_to_ynq.actual? '(is_hungry AG)), and ``AG is hungry'' without the
+;; double quotes is printed.  Otherwise, (not (is_hungry AG)) is
+;; returned and ``it is not the case that AG is hungry'' is printed without
+;; the double quotes.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun answer_to_ynq.actual? (wff)
+	(check-yn-fact-in-kb 'T wff (state-node-wff-htable *curr-state-node*))
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Function answer_to_whq? returns a collection of well-formed formula(s)
+;; as the answer to the arg wff reflecting what are currently in AG's KB,
+;; under the closed world assumption. Arg wff is a wh-question that has
+;; variables prefixed with ? appearing in slots filled by wh-words.
+;; For example, if AG likes only APPLE1 and BANANA2 according to AG's KB,
+;; then ((likes AG APPLE1) (likes AG BANANA2)) is returned as response to
+;; (answer_to_whq? '(likes AG ?wh)). If no answer is found,
+;; then '(not (knows (AG the-answer))) is returned.
+;; This is the `model' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun answer_to_whq? (wff)
+	(check-whq-answer-in-kb 'NIL wff (state-node-wff-htable *curr-state-node*))
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Function answer_to_whq.actual? returns a collection of well-formed
+;; formula(s) as the answer to the arg wff reflecting what are currently in
+;; AG's KB, under the closed world assumption. Arg wff is a wh-question
+;; with variables prefixed with ? appearing in slots filled by wh-words.
+;; For example, if AG likes only APPLE1 and BANANA2 according to AG's KB,
+;; ((likes AG APPLE1) (likes AG BANANA2)) is returned as the response to
+;; (answer_to_whq.actual? '(likes AG ?wh)), and ``AG likes APPLE1'' and ``AG likes
+;; BANANA2'' without double quotes are printed on two lines.  If no answer
+;; is found, '(not (knows (AG the-answer))) is returned and ``it is not the
+;; case that AG knows the answer'' without the double quotes is printed .
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun answer_to_whq.actual? (wff)
+	(check-whq-answer-in-kb 'T wff (state-node-wff-htable *curr-state-node*))
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator answer_user_ynq, AG answers the yes-no question ?q asked
+;; by USER.
+;; This is the `model' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq answer_user_ynq
+      (make-op :name 'answer_user_ynq :pars '(?q)
+        :preconds '( (wants USER (that (tells AG USER (whether ?q)))) )
+        :effects '( (not (wants USER (that (tells AG USER (whether ?q)))))
+                    (knows USER (that (answer_to_ynq? ?q)))
+			  		)
+        :time-required 1
+        :value 10
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator answer_user_ynq.actual, AG answers the yes-no question
+;; ?q asked by USER.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq answer_user_ynq.actual
+	(make-op.actual :name 'answer_user_ynq.actual :pars '(?q)
+	:startconds '( (wants USER (that (tells AG USER (whether ?q)))) )
+	:stopconds '( (not (wants USER (that (tells AG USER (whether ?q))))) )
+	:deletes '( (wants USER (that (tells AG USER (whether ?q)))) )
+	:adds '( ;(knows USER (that (answer_to_ynq?.actual ?q)))
+					 (says+to+at_time AG (that (answer_to_ynq.actual? ?q)) USER (current_time?))
+					 (not (wants USER (that (tells AG USER (whether ?q)))))
+		   	 )
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator answer_user_whq, AG answers the wh-question ?q asked by
+;; USER.
+;; This is the `model' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq answer_user_whq
+	(make-op :name 'answer_user_whq :pars '(?q)
+	:preconds '( (wants USER (that (tells AG USER (answer_to_whq ?q)))) )
+	:effects '( (not (wants USER (that (tells AG USER (answer_to_whq ?q)))))
+				(knows USER (that (answer_to_whq? ?q)))
+			  )
+	:time-required 1
+	:value 10
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator answer_user_whq.actual, AG answers the wh-question ?q
+;; asked by USER.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq answer_user_whq.actual
+	(make-op.actual :name 'answer_user_whq.actual :pars '(?q)
+	:startconds '( (wants USER (that (tells AG USER (answer_to_whq ?q)))) )
+	:stopconds '( (not (wants USER (that (tells AG USER (answer_to_whq ?q))))) )
+	:deletes '( (wants USER (that (tells AG USER (answer_to_whq ?q)))) )
+	:adds	'( ;(knows USER (that (answer_to_whq.actual? ?q)))
+			   (says+to+at_time AG (that (answer_to_whq.actual? ?q)) USER (current_time?))
+			   (not (wants USER (that (tells AG USER (answer_to_whq ?q)))))
+			 )
+	)
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; With operator walk, AG walks from point ?x to point ?y on road ?z, with
@@ -104,19 +380,19 @@
 ;; This is the `model' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq walk
-  (make-op :name 'walk :pars '(?x ?y ?z ?f)
+	(make-op :name 'walk :pars '(?x ?y ?z ?f)
 	:preconds '((is_at AG ?x)
-         				(is_on ?x ?z)
-         				(is_on ?y ?z) (point ?y)
-         				(navigable ?z)
+				(is_on ?x ?z)
+				(is_on ?y ?z) (point ?y)
+				(navigable ?z)
                 (is_tired_to_degree AG ?f) )
-  :effects '((is_at AG ?y)
-       		   (not (is_at AG ?x))
-            ;(is_tired_to_degree AG (+ ?f 0.5))
-            (is_tired_to_degree AG (+ ?f (* 0.5 (distance_from+to+on? ?x ?y ?z))))
-            (not (is_tired_to_degree AG ?f)) )
-  :time-required '(distance_from+to+on? ?x ?y ?z)
-  :value '(- 3 ?f)
+    :effects '((is_at AG ?y)
+    		   (not (is_at AG ?x))
+               ;(is_tired_to_degree AG (+ ?f 0.5))
+               (is_tired_to_degree AG (+ ?f (* 0.5 (distance_from+to+on? ?x ?y ?z))))
+               (not (is_tired_to_degree AG ?f)) )
+    :time-required '(distance_from+to+on? ?x ?y ?z)
+    :value '(- 3 ?f)
     )
 )
 
@@ -293,7 +569,7 @@
 				 (is_potable ?x)
 				 (knows AG (whether (is_potable ?x)))
 				 (not (there_is_a_fire))
-         (not (there_is_a_flood)) )
+                 (not (there_is_a_flood)) )
 	:effects '( (is_thirsty_to_degree AG 0.0)
 				(not (is_thirsty_to_degree AG ?h)) )
 	:time-required 1
@@ -324,70 +600,87 @@
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; action for studying
-;; agent picks up a book in RR as preconds AND
-;; agent speaks to the professor as preconds for studying to evaluate to true
+;; If at the same location ?z as is an agent ?x who knows whether ?y holds
+;; which AG does not know, then AG can ask ?x and know whether ?y holds.
+;; This is the `model' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq study
-  (make-op :name 'study :pars '(?b ?f ?h) ; study when AG not tired/hungry
-  :preconds '( (is_at AG rr)
-          (is_exam_relevant ?b)
-          (is_tired_to_degree AG ?f)
-          (>= ?f 0.0) ; not tired
-          (is_hungry_to_degree AG ?h)
-          (>= ?h 0.0) ; not hungry
-          (is_at ?b hylan)
-          (not (there_is_a_fire))
-          (not (there_is_a_flood)) )
-	:effects '( (has_studied AG)
-          (is_hungry_to_degree AG (+ ?h 1.0))
-          (is_tired_to_degree AG (+ ?h 1.0)) ) ; effects that make sure agent has studied
+(setq ask+whether
+	(make-op :name 'ask+whether :pars '(?x ?y ?z)
+	:preconds '( (is_at AG ?z)
+				 (is_at ?x ?z)
+				 (can_talk ?x)
+				 (knows ?x (whether ?y))
+				 (not (knows AG (whether ?y))) )
+	:effects '( (knows AG (whether ?y)) )
 	:time-required 1
-	:value '(2) ; increase in studying preparedness maybe as variable p
-))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; action for studying.actual
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq study.actual
-	(make-op.actual :name 'study.actual :pars '(?b ?f ?h)
-	:startconds '( (is_at AG rr)
-           (is_exam_relevant ?b)
-           (is_tired_to_degree AG ?f)
-           (>= ?f 0.0)
-           (is_hungry_to_degree AG ?h)
-				   (>= ?h 0.0)
-           (is_at ?b rr) )
-	:stopconds '( (has_studied AG)
-          (there_is_a_fire)
-				  (there_is_a_flood)
-          (is_tired_to_degree AG 0.0)
-				  (is_hungry_to_degree AG 0.0) )
-	:deletes '( (is_hungry_to_degree AG ?#1)
-            (is_tired_to_degree AG ?#2) )
-	:adds '( (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
-           (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))))
+	:value 5
 	)
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; action for exam taking
-;; when AG has studying as true, they pass the exam
+;; If at the same location ?z as is an agent ?x who knows whether ?y holds
+;; which AG does not know, then AG can ask ?x and know whether ?y holds.
+;; This is the `actual' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; (setq testing
-;   (make-op :name 'testing :pars '(?e ?f ?h) ; exam e testing when AG not tired/hungry
-;   :preconds '( (is_at AG hylan)
-;           (has_studied AG)
-;           (is_tired_to_degree AG ?f)
-;           (>= ?f 0.0) ; not tired
-;           (is_hungry_to_degree AG ?h)
-;           (>= ?h 0.0) ; not hungry
-;           (is_at ?e hylan)
-;           (not (there_is_a_fire))
-;           (not (there_is_a_flood)) )
-; 	:effects '( ()
-;           (is_hungry_to_degree AG (+ ?h 1.0))
-;           (is_tired_to_degree AG (+ ?h 1.0)) ) ; effects that make sure agent has studied
-; 	:time-required 1
-; 	:value '(2) ; increase in studying preparedness maybe as variable p
-; ))
+(setq ask+whether.actual
+	(make-op.actual :name 'ask+whether.actual :pars '(?x ?y ?z)
+	:startconds '( (is_at AG ?z)
+				   (is_at ?x ?z)
+				   (can_talk ?x)
+				   (knows ?x (whether ?y))
+				   (not (knows AG (whether ?y))) )
+	:stopconds '( (knows AG (whether ?y)) )
+	:deletes '( )
+	:adds '( (knows AG (whether ?y)) )
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; If bored, at the same location ?y as is a is_playable item ?x, and
+;; aware of it being is_playable, then AG can play ?x to relieve his boredom
+;; but also experience an increase in both his hunger ?h and fatigue ?f.
+;; This is the `model' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq play
+	(make-op :name 'play :pars '(?h ?f ?x ?y) ; level of hunger ?h
+	:preconds '( (is_bored AG) 				  ; level of fatigue ?f
+				 (is_at AG ?y)
+				 (is_at ?x ?y)
+				 (is_playable ?x)
+				 (is_thirsty_to_degree AG ?h)
+                 (is_tired_to_degree AG ?f)
+				 (knows AG (whether (is_playable ?x))) )
+	:effects '( (not (is_bored AG))
+				(not (is_thirsty_to_degree AG ?h))
+                (not (is_tired_to_degree AG ?f))
+				(is_thirsty_to_degree AG (+ ?h 0.5))
+                (is_tired_to_degree AG (+ ?f 0.5)) )
+	:time-required 1
+	:value 3
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; If at the same location ?y as is a is_playable item ?x and aware of it
+;; being is_playable, and as long as AG is bored, then AG can play ?x to
+;; relieve his boredom but also experience an increase in both his hunger
+;; ?h and fatigue ?f.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq play.actual
+	(make-op.actual :name 'play.actual :pars '(?h ?f ?x ?y)
+	:startconds '( (is_bored AG)
+				   (is_at AG ?y)
+				   (is_at ?x ?y)
+				   (is_playable ?x)
+				   (is_thirsty_to_degree AG ?h)
+                   (is_tired_to_degree AG ?f)
+				   (knows AG (whether (is_playable ?x))) )
+	:stopconds '( (not (is_bored AG)) )
+	:deletes '( (is_tired_to_degree AG ?#2)
+                (is_thirsty_to_degree AG ?#1)
+                (is_bored AG) )
+    :adds '( (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
+             (is_thirsty_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
+	)
+)
