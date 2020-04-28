@@ -8,5 +8,5 @@
 (load "go.lisp")
 (load "implement-effects.lisp")
 (load "simulation-and-function-evaluation.lisp")
-(load "gridworld-world.lisp")
+(load "new-gridworld.lisp")
 (initialize-state-node)

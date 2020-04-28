@@ -47,10 +47,12 @@
   '((is_hungry_to_degree AG 4.0)
     (is_thirsty_to_degree AG 2.0)
     (is_tired_to_degree AG 0.0)
-    (is_at coffee1 rr)
+    (is_at coffee1 wilco)
     (is_at burger1 douglas)
-    (is_at book1 rr)
+    (is_at book1 dorm)
+    (is_at book2 rr)
     (is_at exam1 hylan)
+    (is_takeable exam1)
     (can_talk professor1)
     (is_at professor1 hylan)
      ; Note AG knows (is_potable coffee2), (is_edible burger3), (is_playable threadmill4) and (is_writable exam5) right after the call to function initialize-state-node
@@ -62,7 +64,9 @@
   )
   ; propositional attitudes
   '((knows AG (whether (is_edible burger1)))
-    (knows AG (whether (is_potable coffee1))))
+    (knows AG (whether (is_potable coffee1)))
+    (knows AG (that (knows professor1 (whether (is_exam_relevant book1)))))
+    (knows AG (that (knows professor1 (whether (is_exam_relevant book2)))))
   )
 )
 
@@ -70,7 +74,8 @@
 (place-object 'professor1 'professor 'hylan 0
   nil
   nil
-  nil
+  '((knows professor1 (whether (is_exam_relevant book1)))
+    (knows professor1 (whether (is_exam_relevant book2))) )
 )
 
 (place-object 'burger1 'burger 'douglas 0
@@ -79,21 +84,27 @@
   nil
 )
 
-(place-object 'coffee1 'coffee 'rr 0
+(place-object 'coffee1 'coffee 'wilco 0
 	nil
 	'((is_potable coffee1))
   nil
 )
 
-(place-object 'book1 'book 'rr 0
+(place-object 'book1 'book 'dorm 0
   nil
-  '((is_exam_relevant book1))
+  nil
+  nil
+)
+
+(place-object 'book2 'book 'rr 0
+  nil
+  '((is_exam_relevant book2))
   nil
 )
 
 (place-object 'exam1 'exam 'hylan 0
   nil
-  '((is_exam_relevant book1))
+  '((is_takeable exam1))
   nil
 )
 
@@ -103,7 +114,7 @@
 
 ;; setting search-beam
 (setq *search-beam*
-  (list (cons 5 *operators*) (cons 4 *operators*) (cons 3 *operators*)) )
+  (list (cons 7 *operators*) (cons 6 *operators*) (cons 5 *operators*)) )
 
 
 ;;; Defining custom actions
@@ -112,22 +123,22 @@
 ;; ADD DESCRIPTION
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq study
-  (make-op :name 'study :pars '(?f ?h ?x ?b) ; ?f fatigue, ?h hunger
+  (make-op :name 'study :pars '(?f ?h ?x ?b)
   :preconds '( (not (has_studied AG))
           (is_at AG ?x)
-          (is_at ?b ?x) ; needs book ?b to study
+          (is_at ?b ?x)
           (is_exam_relevant ?b)
           (is_tired_to_degree AG ?f)
-          (< ?f 3.0) ; cannot study when tired
+          (< ?f 5.0)
           (is_hungry_to_degree AG ?h)
-          (< ?h 3.0) ; cannot study when hungry
+          (< ?h 5.0)
           (not (there_is_a_fire))
           (not (there_is_a_flood)) )
-  :effects '( (has_studied AG) ; agent has now studied
+  :effects '( (has_studied AG)
           (is_hungry_to_degree AG (+ ?h 0.5)
           (is_tired_to_degree AG (+ ?h 0.5))) )
   :time-required 1
-  :value 1
+  :value 10
   )
 )
 
@@ -141,9 +152,9 @@
           (is_at ?b ?x)
           (is_exam_relevant ?b)
           (is_tired_to_degree AG ?f)
-          (< ?f 3.0)
+          (< ?f 5.0)
           (is_hungry_to_degree AG ?h)
-          (< ?h 3.0) )
+          (< ?h 5.0) )
   :stopconds '( (has_studied AG)
           (there_is_a_fire)
           (there_is_a_flood) )
@@ -159,22 +170,23 @@
 ;; ADD DESCRIPTION
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq take_exam
-  (make-op :name 'take-exam :pars '(?f ?h ?x ?e)
-  :preconds '( (has_studied AG)
+  (make-op :name 'take_exam :pars '(?f ?h ?x ?e)
+  :preconds '( (not (has_taken AG ?e))
+          (has_studied AG)
           (is_at AG ?x)
           (is_at ?e ?x)
           (is_takeable ?e)
           (is_tired_to_degree AG ?f)
-          (< ?f 3.0)
+          (< ?f 5.0)
           (is_hungry_to_degree AG ?h)
-          (< ?h 3.0)
+          (< ?h 5.0)
           (not (there_is_a_fire))
           (not (there_is_a_flood)) )
-  :effects '( (not (is_at ?e ?x)
-          (is_hungry_to_degree AG (+ ?h 0.5)
-          (is_tired_to_degree AG (+ ?h 0.5))) )
+  :effects '( (has_taken AG ?e)
+          (is_hungry_to_degree AG (+ ?h 0.5))
+          (is_tired_to_degree AG (+ ?h 0.5)) )
   :time-required 1
-  :value 5
+  :value 20
   )
 )
 
@@ -183,21 +195,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq take_exam.actual
   (make-op.actual :name 'take_exam.actual :pars '(?f ?h ?x ?e)
-  :startconds '( (has_studied AG)
+  :startconds '( (not (has_taken AG ?e))
+          (has_studied AG)
           (is_at AG ?x)
           (is_at ?e ?x)
           (is_takeable ?e)
           (is_tired_to_degree AG ?f)
-          (< ?f 3.0)
+          (< ?f 5.0)
           (is_hungry_to_degree AG ?h)
-          (< ?h 3.0) )
-  :stopconds '( (not (is_at ?#4 ?#3))
+          (< ?h 5.0) )
+  :stopconds '((has_taken AG ?#4)
           (there_is_a_fire)
           (there_is_a_flood) )
-  :deletes '( (is_at ?#4 ?#3)
-        (is_tired_to_degree AG ?#1)
+  :deletes '( (is_tired_to_degree AG ?#1)
         (is_thirsty_to_degree AG ?#2) )
-  :adds '(
+  :adds '( (has_taken AG ?e)
       (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
       (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
   )
