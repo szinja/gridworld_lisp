@@ -27,8 +27,8 @@
 (def-object 'professor '(is_animate can_talk))
 (def-object 'burger '(is_inanimate is_edible (has_cost 5.0)))
 (def-object 'coffee '(is_inanimate is_potable (has_cost 3.0)))
-(def-object 'book '(is_inanimate is_potable))
-(def-object 'exam '(is_inanimate is_takeable))
+(def-object 'book '(is_inanimate is_readable))
+(def-object 'exam '(is_inanimate))
 
 ;;; General knowledge of AG from the onset
 ;;; Initially AG is in the dorm, not tired, and has hunger level of 5.0 and a thirst level of 3.0.
@@ -110,7 +110,7 @@
 
 ;; setting operators
 (setq *operators* '(walk eat answer_user_ynq answer_user_whq sleep
-                    drink ask+whether play study take_exam) )
+                    drink ask+whether play study take_exam workout) )
 
 ;; setting search-beam
 (setq *search-beam*
@@ -138,7 +138,7 @@
           (is_hungry_to_degree AG (+ ?h 0.5)
           (is_tired_to_degree AG (+ ?h 0.5))) )
   :time-required 1
-  :value 10
+  :value 0
   )
 )
 
@@ -159,7 +159,7 @@
           (there_is_a_fire)
           (there_is_a_flood) )
   :deletes '( (is_tired_to_degree AG ?#1)
-        (is_thirsty_to_degree AG ?#2) )
+        (is_hungry_to_degree AG ?#2) )
   :adds '( (has_studied AG)
       (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
       (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
@@ -186,7 +186,7 @@
           (is_hungry_to_degree AG (+ ?h 0.5))
           (is_tired_to_degree AG (+ ?h 0.5)) )
   :time-required 1
-  :value 20
+  :value 25
   )
 )
 
@@ -204,17 +204,62 @@
           (< ?f 5.0)
           (is_hungry_to_degree AG ?h)
           (< ?h 5.0) )
-  :stopconds '((has_taken AG ?#4)
+  :stopconds '((has_taken AG ?e)
           (there_is_a_fire)
           (there_is_a_flood) )
   :deletes '( (is_tired_to_degree AG ?#1)
-        (is_thirsty_to_degree AG ?#2) )
+        (is_hungry_to_degree AG ?#2) )
   :adds '( (has_taken AG ?e)
       (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
       (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
   )
 )
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ADD DESCRIPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq workout
+  (make-op :name 'workout :pars '(?f ?h ?w)
+  :preconds '( (is_at AG goergen)
+          (is_tired_to_degree AG ?f)
+          (< ?f 4.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 4.0)
+          (is_thirsty_to_degree AG ?w)
+          (< ?w 2.0)
+          (not (there_is_a_fire))
+          (not (there_is_a_flood)) )
+  :effects '((is_tired_to_degree AG (+ ?f 1.0))
+          (is_hungry_to_degree AG (+ ?h 1.0))
+          (is_thirsty_to_degree AG 2.0) )
+  :time-required 1
+  :value 15
+  )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ADD DESCRIPTION
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq workout.actual
+  (make-op.actual :name 'workout.actual :pars '(?f ?h ?w)
+  :startconds '( (is_at AG goergen)
+          (is_tired_to_degree AG ?f)
+          (< ?f 4.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 4.0)
+          (is_thirsty_to_degree AG ?w)
+          (< ?w 2.0) )
+  :stopconds '( (is_thirsty_to_degree AG 2.0)
+          (there_is_a_fire)
+          (there_is_a_flood) )
+  :deletes '( (is_tired_to_degree AG ?#1)
+        (is_hungry_to_degree AG ?#2)
+        (is_thirsty_to_degree AG ?#3) )
+  :adds '( (is_tired_to_degree AG (+ ?f (* 1.0 (elapsed_time?))))
+      (is_hungry_to_degree AG (+ ?h (* 1.0 (elapsed_time?))))
+      (is_thirsty_to_degree AG 2.0) )
+  )
+)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; CODE BELOW FROM PROVIDED SAMPLE GRIDWORLD-WORLD
