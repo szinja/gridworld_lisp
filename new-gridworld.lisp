@@ -1,21 +1,18 @@
 ;;; Martin Helmrich and Sisipho Zinja
 
-;;; Agent is placed in a model of the University of Rochester campus.
-;;; The campus will include a Dormitory that the agent is initially placed in, Wilson Commons which is a student center,
-;;; Douglas Dining Hall for eating, and Hylan Hall lecture hall to learn new information and to take exams,
-;;; Rhush Rhees Library to study and prepare for the exams.
-;;; Goergen Athletic Center to keep fit and boost serotonin levels.
+;;; The agent is placed in a world that models the U of R campus.
+;;; At each location, the agent can engage in the following actions:
+;;; 1. Dormitory: sleep
+;;; 2. Douglas Dining Hall: eat (burger1)
+;;; 3. Rush-Rhees: study (book2)
+;;; 4. Wilson Commons: drink (coffee1), play (piano1)
+;;; 5. Hylan Hall: attend_class, take_exam (exam1), ask questions (professor1)
+;;; 6. Goergen Athletic Center: workout
 
-;;; We do not need Wegmans Food Market to buy groceries because we satisfy eating state-value at Douglas or the movie theater for entertainment because we have WilCo
-
-;;; Actions performed at each location include:
-;;; Dormitory; the agent is able to sleep and fulfill the basic need for rest.
-;;; WilCo; the agent will interact and socialize with other students for entertainment.
-;;; Douglas; the agent will eat a burger here when they are hungry to gain energy.
-;;; Hylan Hall; the agent will learn new information through attending classes taught by a professor and will also take exams here.
-;;;             The agent will do better when they have studied for the exams in Rhush Rhees and attended all the lectures.
-;;; Goergen Athletic Center; to exercise and keep energy levels up.
-;;; Rhush Rhees Library; the agent will study for exams here, so that taking exams will be highly rewarding.
+;; Defining roadmap. All roads have length 1 and are undirected.
+;; Dorm, Douglas, RR and WilCo are directly connected to each other.
+;; Goergen is directly connected to Dorm and Douglas.
+;; Hylan is directly connected to RR and WilCo.
 (def-roadmap '(dorm douglas rr wilco hylan goergen)
     '((path1 dorm 1 goergen) (path2 dorm 1 douglas)
       (path3 dorm 1 rr) (path4 dorm 1 wilco)
@@ -23,27 +20,23 @@
       (path7 douglas 1 rr) (path8 rr 1 wilco)
       (path9 rr 1 hylan) (path10 wilco 1 hylan)))
 
+;; Defining object types:
+;; student, professor, burger, coffee, book, exam, instrument
 (def-object 'student '(is_animate can_talk))
 (def-object 'professor '(is_animate can_talk))
 (def-object 'burger '(is_inanimate is_edible (has_cost 5.0)))
 (def-object 'coffee '(is_inanimate is_potable (has_cost 3.0)))
 (def-object 'book '(is_inanimate is_readable))
 (def-object 'exam '(is_inanimate))
+(def-object 'instrument '(is_inanimate is_playable))
 
-;;; General knowledge of AG from the onset
-;;; Initially AG is in the dorm, not tired, and has hunger level of 5.0 and a thirst level of 3.0.
-;;; In addition to the knowledge of the road network, the existence of objects at the dorm and their general properties.,
-;;; AG knows that burger is in Douglas, coffee is in Rhush Rhees, and the threadmill is in Goergen.
-;;; The AG knows that the professor can talk, is in Hylan, and knows what will be on the exam.
-;;; The professor will grade the exam written by the agent, and will know whether the agent passes or not.
-
-;;; Note that we create some "current facts" about
-;;; AG that are really about the state of the University campus
-;;; this is just a way of ensuring that AG knows these
-;;; facts right at the outset.
+;; AG is declared as student and placed at the dorm.
+;; AG starts with hunger level 4, thirst level 2, and no fatigue.
+;; Initial knowledge consists of roadmap, world facts (mainly object locations)
+;; as well as some extra information about occluded facts.
 (place-object 'AG 'student 'dorm 0
   nil ; no associated-things
-  ; current facts
+  ; current world facts AG knows:
   '((is_hungry_to_degree AG 4.0)
     (is_thirsty_to_degree AG 2.0)
     (is_tired_to_degree AG 0.0)
@@ -52,17 +45,12 @@
     (is_at book1 dorm)
     (is_at book2 rr)
     (is_at exam1 hylan)
-    (is_takeable exam1)
-    (can_talk professor1)
     (is_at professor1 hylan)
-     ; Note AG knows (is_potable coffee2), (is_edible burger3), (is_playable threadmill4) and (is_writable exam5) right after the call to function initialize-state-node
-     ; therefore, these are all hidden from AG from onset to prevent
-     ; AG from knowing about the writability of the exam2 and edibility of the burger, portability of the coffee etc on the outset until it goes to locations.
-     ; AG will also know about the playability of the threadmill, (is_playable threadmill4) later and will be hidden as well.
-     ; one would need to specify general inference rules from AG to use,
-     ; separate from *general knowledge*
+    (is_at piano1 wilco)
+    (can_talk professor1)
+    (is_takeable exam1)
   )
-  ; propositional attitudes
+  ; propositional attitudes:
   '((knows AG (whether (is_edible burger1)))
     (knows AG (whether (is_potable coffee1)))
     (knows AG (that (knows professor1 (whether (is_exam_relevant book1)))))
@@ -70,7 +58,8 @@
   )
 )
 
-;;; Placing objects in the world
+;; Placing objects in the world: professor1 (hylan), burger1 (douglas),
+;; coffee1 (wilco), book1 (dorm), book2 (rr), exam1 (hylan), piano1 (wilco)
 (place-object 'professor1 'professor 'hylan 0
   nil
   nil
@@ -108,19 +97,30 @@
   nil
 )
 
-;; setting operators
-(setq *operators* '(walk eat answer_user_ynq answer_user_whq sleep
-                    drink ask+whether play study take_exam workout) )
+(place-object 'piano1 'instrument 'wilco 0
+	nil
+	'((is_playable piano1))
+  nil
+)
 
-;; setting search-beam
+;; Setting action operators.
+;; New: study, take_exam, attend_class, workout
+;; Modified: play, sleep
+;; Provided: eat, drink, sanswer_user_ynq, answer_user_whq, ask+whether
+(setq *operators* '(walk eat drink sleep study take_exam attend_class play
+                    workout answer_user_ynq answer_user_whq ask+whether) )
+
+;; Setting search width and depth. Minimum 5*4*3 recommended.
+;; No clear advantage of going beyond 6*5*4*3 when tested.
 (setq *search-beam*
-  (list (cons 7 *operators*) (cons 6 *operators*) (cons 5 *operators*)) )
+	(list (cons 5 *operators*) (cons 4 *operators*) (cons 3 *operators*)) )
 
-
-;;; Defining custom actions
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ADD DESCRIPTION
+;; With operator study, AG gets has_studied property required for take_exam.
+;; AG needs to have exam-relevant book ?b, low fatigue ?f and hunger ?h.
+;; AG experiences an increase in fatigue ?f and hunger ?h.
+;; This is the `model' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq study
   (make-op :name 'study :pars '(?f ?h ?x ?b)
@@ -136,14 +136,17 @@
           (not (there_is_a_flood)) )
   :effects '( (has_studied AG)
           (is_hungry_to_degree AG (+ ?h 0.5)
-          (is_tired_to_degree AG (+ ?h 0.5))) )
+          (is_tired_to_degree AG (+ ?f 0.5))) )
   :time-required 1
   :value 0
   )
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ADD DESCRIPTION
+;; With operator study, AG gets has_studied property required for take_exam.
+;; AG needs to have exam-relevant book ?b, low fatigue ?f and hunger ?h.
+;; AG experiences an increase in fatigue ?f and hunger ?h.
+;; This is the `actual' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq study.actual
   (make-op.actual :name 'study.actual :pars '(?f ?h ?x ?b)
@@ -167,7 +170,11 @@
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ADD DESCRIPTION
+;; With operator take_exam, AG gains 25 value points for passing exam.
+;; AG needs to have studied and low levels of fatigue ?f and hunger ?h.
+;; AG experiences an increase in fatigue ?f and hunger ?h.
+;; A given exam ?e can only be taken once.
+;; This is the `model' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq take_exam
   (make-op :name 'take_exam :pars '(?f ?h ?x ?e)
@@ -191,7 +198,11 @@
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ADD DESCRIPTION
+;; With operator take_exam, AG gains 25 value points for passing exam.
+;; AG needs to have studied and low levels of fatigue ?f and hunger ?h.
+;; AG experiences an increase in fatigue ?f and hunger ?h.
+;; A given exam ?e can only be taken once.
+;; This is the `actual' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq take_exam.actual
   (make-op.actual :name 'take_exam.actual :pars '(?f ?h ?x ?e)
@@ -216,7 +227,10 @@
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ADD DESCRIPTION
+;; With operator workout, AG gains 18 value points for staying healthy.
+;; AG needs to be at Goergen and have low levels of fatigue ?f, hunger ?h,
+;; and thirst ?w. AG experiences an increase in fatigue, hunger and thirst.
+;; This is the `model' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq workout
   (make-op :name 'workout :pars '(?f ?h ?w)
@@ -233,12 +247,15 @@
           (is_hungry_to_degree AG (+ ?h 1.0))
           (is_thirsty_to_degree AG 2.0) )
   :time-required 1
-  :value 15
+  :value 18
   )
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; ADD DESCRIPTION
+;; With operator workout, AG gains 18 value points for staying healthy.
+;; AG needs to be at Goergen and have low levels of fatigue ?f, hunger ?h,
+;; and thirst ?w. AG experiences an increase in fatigue, hunger and thirst.
+;; This is the `actual' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (setq workout.actual
   (make-op.actual :name 'workout.actual :pars '(?f ?h ?w)
@@ -262,13 +279,101 @@
 )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; CODE BELOW FROM PROVIDED SAMPLE GRIDWORLD-WORLD
+;; With operator attend_class, AG gets bored, enabling play action.
+;; AG needs to be at Hylan and have low levels of fatigue ?f and hunger ?h.
+;; AG experiences an increase in fatigue ?f and hunger ?h.
+;; This is the `model' version.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq attend_class
+  (make-op :name 'attend_class :pars '(?f ?h)
+  :preconds '( (not (is_bored AG))
+          (is_at AG hylan)
+          (is_tired_to_degree AG ?f)
+          (< ?f 5.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 5.0)
+          (not (there_is_a_fire))
+          (not (there_is_a_flood)) )
+  :effects '( (is_tired_to_degree AG (+ ?f 0.5))
+          (is_hungry_to_degree AG (+ ?h 0.5)) )
+  :time-required 1
+  :value 10
+  )
+)
 
-;(setq *occluded-preds*
-;    '(is_playable knows is_edible is_potable)
-; We omit this, as *occluded-preds* is currently already set in
-; "gridworld-definitions.lisp".
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator attend_class, AG gets bored, enabling play action.
+;; AG needs to be at Hylan and have low levels of fatigue ?f and hunger ?h.
+;; AG experiences an increase in fatigue ?f and hunger ?h.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq attend_class.actual
+  (make-op.actual :name 'attend_class.actual :pars '(?f ?h)
+  :startconds '( (not (is_bored AG))
+          (is_at AG hylan)
+          (is_tired_to_degree AG ?f)
+          (< ?f 5.0)
+          (is_hungry_to_degree AG ?h)
+          (< ?h 5.0) )
+  :stopconds '( (is_bored AG)
+          (there_is_a_fire)
+          (there_is_a_flood) )
+  :deletes '( (is_tired_to_degree AG ?#1)
+          (is_hungry_to_degree AG ?#2) )
+  :adds '( (is_bored AG)
+      (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
+      (is_hungry_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
+  )
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator play, AG gains 15 value points from playing an instrument.
+;; AG needs to be bored, have playable instrument ?p and low fatigue ?f.
+;; AG experiences an increase in fatigue ?f.
+;; This is the `model' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq play
+	(make-op :name 'play :pars '(?f ?p ?x)
+	:preconds '( (is_bored AG)
+				 (is_at AG ?x)
+				 (is_at ?p ?x)
+				 (is_playable ?p)
+         (is_tired_to_degree AG ?f)
+         (< ?f 5.0)
+				 (knows AG (whether (is_playable ?p))) )
+	:effects '( (not (is_bored AG))
+        (not (is_tired_to_degree AG ?f))
+        (is_tired_to_degree AG (+ ?f 0.5)) )
+	:time-required 1
+	:value 15
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; With operator play, AG gains 15 value points from playing an instrument.
+;; AG needs to be bored, have playable instrument ?p and low fatigue ?f.
+;; AG experiences an increase in fatigue ?f.
+;; This is the `actual' version.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(setq play.actual
+	(make-op.actual :name 'play.actual :pars '(?f ?p ?x)
+	:startconds '( (is_bored AG)
+				   (is_at AG ?x)
+				   (is_at ?p ?x)
+				   (is_playable ?p)
+           (is_tired_to_degree AG ?f)
+           (< ?f 5.0)
+				   (knows AG (whether (is_playable ?p))) )
+	:stopconds '( (not (is_bored AG)) )
+	:deletes '( (is_tired_to_degree AG ?#1)
+              (is_bored AG) )
+    :adds '( (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?)))) )
+	)
+)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; CODE BELOW FROM PROVIDED SAMPLE GRIDWORLD-WORLD.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Operator fire.actual is the exogenous fire operator.  As long as there
@@ -509,7 +614,7 @@
     :stopconds '((not (navigable ?z))
     			 (is_at AG ?y) )
     :deletes '((is_at AG ?#1)
-    		   (is_tired_to_degree AG ?#2))
+    		   (is_tired_to_degree AG ?#4))
     :adds '((is_at AG (the_pt+units_from+towards+on_road? (* 1 (elapsed_time?)) ?x ?y ?z))
     		(is_at AG (the_pt+units_from+towards+on_road? (- (distance_from+to+on? ?x ?y ?z) (* 1 (elapsed_time?))) ?y ?x ?z))
     	    (is_on (the_pt+units_from+towards+on_road? (* 1 (elapsed_time?)) ?x ?y ?z) ?z)
@@ -689,55 +794,5 @@
 	:stopconds '( (knows AG (whether ?y)) )
 	:deletes '( )
 	:adds '( (knows AG (whether ?y)) )
-	)
-)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; If bored, at the same location ?y as is a is_playable item ?x, and
-;; aware of it being is_playable, then AG can play ?x to relieve his boredom
-;; but also experience an increase in both his hunger ?h and fatigue ?f.
-;; This is the `model' version.
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq play
-	(make-op :name 'play :pars '(?h ?f ?x ?y) ; level of hunger ?h
-	:preconds '( (is_bored AG) 				  ; level of fatigue ?f
-				 (is_at AG ?y)
-				 (is_at ?x ?y)
-				 (is_playable ?x)
-				 (is_thirsty_to_degree AG ?h)
-                 (is_tired_to_degree AG ?f)
-				 (knows AG (whether (is_playable ?x))) )
-	:effects '( (not (is_bored AG))
-				(not (is_thirsty_to_degree AG ?h))
-                (not (is_tired_to_degree AG ?f))
-				(is_thirsty_to_degree AG (+ ?h 0.5))
-                (is_tired_to_degree AG (+ ?f 0.5)) )
-	:time-required 1
-	:value 3
-	)
-)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; If at the same location ?y as is a is_playable item ?x and aware of it
-;; being is_playable, and as long as AG is bored, then AG can play ?x to
-;; relieve his boredom but also experience an increase in both his hunger
-;; ?h and fatigue ?f.
-;; This is the `actual' version.
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(setq play.actual
-	(make-op.actual :name 'play.actual :pars '(?h ?f ?x ?y)
-	:startconds '( (is_bored AG)
-				   (is_at AG ?y)
-				   (is_at ?x ?y)
-				   (is_playable ?x)
-				   (is_thirsty_to_degree AG ?h)
-                   (is_tired_to_degree AG ?f)
-				   (knows AG (whether (is_playable ?x))) )
-	:stopconds '( (not (is_bored AG)) )
-	:deletes '( (is_tired_to_degree AG ?#2)
-                (is_thirsty_to_degree AG ?#1)
-                (is_bored AG) )
-    :adds '( (is_tired_to_degree AG (+ ?f (* 0.5 (elapsed_time?))))
-             (is_thirsty_to_degree AG (+ ?h (* 0.5 (elapsed_time?)))) )
 	)
 )
